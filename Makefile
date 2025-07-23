@@ -8,6 +8,12 @@ MAIN_PATH := ./cmd/apiserver
 PROTO_DIR := proto
 GO_VERSION := 1.21
 
+# Docker variables
+DOCKER_IMAGE := ai-project-tutorial/apiserver
+DOCKER_TAG := latest
+DOCKERFILE := deployments/docker/Dockerfile
+DOCKER_CONTEXT := .
+
 # Build flags
 LDFLAGS := -w -s
 BUILD_FLAGS := -ldflags="$(LDFLAGS)"
@@ -37,6 +43,85 @@ build-debug: ## Build the apiserver binary with debug symbols
 	@mkdir -p $(OUTPUT_DIR)
 	@go build -gcflags="all=-N -l" -o $(OUTPUT_DIR)/$(BINARY_NAME)-debug $(MAIN_PATH)
 	@echo "$(GREEN)✅ Debug build complete: $(OUTPUT_DIR)/$(BINARY_NAME)-debug$(RESET)"
+
+## Docker targets
+
+.PHONY: docker-build
+docker-build: ## Build Docker image for apiserver
+	@echo "$(BLUE)Building Docker image $(DOCKER_IMAGE):$(DOCKER_TAG)...$(RESET)"
+	@docker build -f $(DOCKERFILE) -t $(DOCKER_IMAGE):$(DOCKER_TAG) $(DOCKER_CONTEXT)
+	@echo "$(GREEN)✅ Docker image built: $(DOCKER_IMAGE):$(DOCKER_TAG)$(RESET)"
+
+.PHONY: docker-buildx-setup
+docker-buildx-setup: ## Set up Docker buildx builder for multi-platform builds
+	@echo "$(BLUE)Setting up Docker buildx builder...$(RESET)"
+	@if ! docker buildx ls | grep -q multiarch-builder; then \
+		docker buildx create --name multiarch-builder --driver docker-container --use; \
+		docker buildx inspect --bootstrap; \
+		echo "$(GREEN)✅ Buildx builder 'multiarch-builder' created and configured$(RESET)"; \
+	else \
+		docker buildx use multiarch-builder; \
+		echo "$(YELLOW)⚠️  Buildx builder 'multiarch-builder' already exists, switching to it$(RESET)"; \
+	fi
+
+.PHONY: docker-build-local-platform
+docker-build-local-platform: docker-buildx-setup ## Build Docker image for local platform using buildx
+	@echo "$(BLUE)Building Docker image for local platform...$(RESET)"
+	@docker buildx build \
+		--platform linux/$(shell uname -m | sed 's/x86_64/amd64/') \
+		-f $(DOCKERFILE) \
+		-t $(DOCKER_IMAGE):$(DOCKER_TAG) \
+		--load \
+		$(DOCKER_CONTEXT)
+	@echo "$(GREEN)✅ Docker image built for local platform$(RESET)"
+
+.PHONY: docker-build-multi
+docker-build-multi: docker-buildx-setup ## Build multi-architecture Docker image to tar file
+	@echo "$(BLUE)Building multi-architecture Docker image...$(RESET)"
+	@mkdir -p ./bin
+	@rm -f ./bin/multiarch-image.tar
+	@docker buildx build \
+		--platform linux/amd64,linux/arm64 \
+		-f $(DOCKERFILE) \
+		-t $(DOCKER_IMAGE):$(DOCKER_TAG) \
+		--output type=oci,dest=./bin/multiarch-image.tar \
+		$(DOCKER_CONTEXT)
+	@echo "$(GREEN)✅ Multi-architecture Docker image built to ./bin/multiarch-image.tar$(RESET)"
+	@echo "$(YELLOW)💡 To load into Docker: docker load < ./bin/multiarch-image.tar$(RESET)"
+
+.PHONY: docker-build-multi-push
+docker-build-multi-push: docker-buildx-setup ## Build and push multi-architecture Docker image (amd64/arm64)
+	@echo "$(BLUE)Building and pushing multi-architecture Docker image...$(RESET)"
+	@docker buildx build \
+		--platform linux/amd64,linux/arm64 \
+		-f $(DOCKERFILE) \
+		-t $(DOCKER_IMAGE):$(DOCKER_TAG) \
+		--push \
+		$(DOCKER_CONTEXT)
+	@echo "$(GREEN)✅ Multi-architecture Docker image built and pushed$(RESET)"
+
+.PHONY: docker-run
+docker-run: docker-build ## Build and run Docker container locally
+	@echo "$(BLUE)Running Docker container $(DOCKER_IMAGE):$(DOCKER_TAG)...$(RESET)"
+	@docker run --rm -p 8080:8080 --name $(BINARY_NAME)-container $(DOCKER_IMAGE):$(DOCKER_TAG)
+
+.PHONY: docker-clean
+docker-clean: ## Clean up Docker images and containers
+	@echo "$(BLUE)Cleaning up Docker resources...$(RESET)"
+	@docker stop $(BINARY_NAME)-container 2>/dev/null || true
+	@docker rm $(BINARY_NAME)-container 2>/dev/null || true
+	@docker rmi $(DOCKER_IMAGE):$(DOCKER_TAG) 2>/dev/null || true
+	@echo "$(GREEN)✅ Docker cleanup complete$(RESET)"
+
+.PHONY: docker-buildx-clean
+docker-buildx-clean: ## Remove Docker buildx builder
+	@echo "$(BLUE)Cleaning up Docker buildx builder...$(RESET)"
+	@if docker buildx ls | grep -q multiarch-builder; then \
+		docker buildx rm multiarch-builder; \
+		echo "$(GREEN)✅ Buildx builder 'multiarch-builder' removed$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠️  Buildx builder 'multiarch-builder' does not exist$(RESET)"; \
+	fi
 
 ## Development targets
 
@@ -177,8 +262,13 @@ install-protobuf-tools: ## Install protobuf generation tools
 clean: ## Clean build artifacts and temporary files
 	@echo "$(BLUE)Cleaning build artifacts...$(RESET)"
 	@rm -rf $(OUTPUT_DIR)
+	@rm -f ./bin/multiarch-image.tar
 	@rm -f coverage.out coverage.html
 	@echo "$(GREEN)✅ Clean complete$(RESET)"
+
+.PHONY: clean-all
+clean-all: clean docker-clean docker-buildx-clean ## Clean all build artifacts and Docker resources
+	@echo "$(GREEN)✅ Complete cleanup finished$(RESET)"
 
 .PHONY: version
 version: ## Show Go version and module info

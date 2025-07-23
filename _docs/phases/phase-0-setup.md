@@ -21,11 +21,10 @@ Establish a minimal running system that demonstrates core architectural componen
 
 ### 1. Project Scaffolding & Go Foundation
 **Goal:** Create properly structured Go project with health endpoints
-- [ ] Initialize Go module with proper directory structure (`cmd/`, `pkg/`, `proto/`)
-- [ ] Implement basic HTTP server with `/health` and `/ready` endpoints  
-- [ ] Add structured logging with correlation IDs
-- [ ] Create Makefile for build automation
-- [ ] Setup basic error handling and graceful shutdown
+- [x] Initialize Go module with proper directory structure (`cmd/`, `pkg/`, `proto/`)
+- [x] Implement basic HTTP server with `/health` and `/ready` endpoints  
+- [x] Create Makefile for build automation
+- [x] Setup basic error handling and graceful shutdown
 
 ### 2. Docker Containerization  
 **Goal:** Package application as multi-architecture container
@@ -42,6 +41,7 @@ Establish a minimal running system that demonstrates core architectural componen
 - [ ] Add database health check integration
 - [ ] Implement connection retry logic with exponential backoff
 - [ ] Test basic query execution against sample ClickHouse instance
+- [ ] Modify readiness checks to only return 200 if the clickhouse connection is good
 
 ### 4. gRPC Service Skeleton
 **Goal:** Define basic gRPC contracts and generate code
