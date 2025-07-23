@@ -84,8 +84,7 @@ flowchart TD
 ├── pkg/                     # Core Go packages
 │   ├── api/                 # gRPC service implementations  
 │   ├── clickhouse/          # Database client & query builders
-│   ├── auth/                # RBAC and authentication
-│   └── telemetry/           # OpenTelemetry instrumentation
+│   └── auth/                # RBAC and authentication
 ├── frontend/src/            # React application
 │   ├── components/          # Reusable UI components
 │   ├── services/            # gRPC client services

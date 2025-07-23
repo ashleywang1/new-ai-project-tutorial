@@ -12,7 +12,6 @@
 - **Libraries**:
   - `google.golang.org/grpc` (core gRPC)
   - `github.com/ClickHouse/clickhouse-go/v2` (ClickHouse client)
-  - `github.com/grpc-ecosystem/grpc-gateway` (optional REST JSON transcoding)
 
 ### Frontend
 - **Framework**: React (v18+)
